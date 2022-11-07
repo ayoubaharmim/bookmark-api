@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { User, Bookmark } from '@prisma/client';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthDto } from './dto';
+import * as argon from 'argon2';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 
 @Injectable()
 export class AuthService {
@@ -9,7 +11,23 @@ export class AuthService {
     return 'This is Sign in';
   }
 
-  signUp() {
-    return 'This is sign up';
+  async signUp(dto: AuthDto) {
+    const hash = await argon.hash(dto.password);
+    try {
+      return await this.prismaService.user.create({
+        data: {
+          email: dto.email,
+          hash,
+        },
+        select: { email: true, createdAt: true },
+      });
+    } catch (e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        if (e.code === 'P2002') {
+          throw new ForbiddenException('Credentials have been already taken');
+        }
+      }
+      throw e;
+    }
   }
 }
